@@ -453,7 +453,8 @@
     saveTimer: null,
     syncTimer: null,
     categories: [...DEFAULT_CATEGORIES],
-    activeCategory: null,  // null = show all
+    activeCategory: null,  // null = show all; 'Business', 'Business/Lipton', etc.
+    expandedFolders: new Set(['Business', 'Creative', 'Tech']),
   };
 
 
@@ -662,97 +663,271 @@
     localStorage.setItem('binnacle_categories_' + state.token, JSON.stringify(state.categories));
   }
 
-  function renderCategoryNav() {
-    const el = document.getElementById('category-nav');
-    const catIcons = { work: 'work', palette: 'palette', terminal: 'terminal', folder: 'folder', star: 'star', group: 'group', build: 'build', science: 'science' };
+  // Build folder tree from file names + category metadata
+  function buildFolderTree() {
+    // tree: { 'Business': { meta: {...}, children: { 'Lipton': { files: [...] }, ... }, files: [...] }, ... }
+    const tree = {};
 
-    // Count files per category
-    const counts = {};
-    for (const cat of state.categories) counts[cat.name] = 0;
-    let uncategorized = 0;
-    for (const f of state.files) {
-      let matched = false;
-      for (const cat of state.categories) {
-        if (f.name.toLowerCase().startsWith(cat.name.toLowerCase() + '/') ||
-            f.name.toLowerCase() === cat.name.toLowerCase()) {
-          counts[cat.name] = (counts[cat.name] || 0) + 1;
-          matched = true;
-          break;
-        }
-      }
-      if (!matched) uncategorized++;
+    // Seed top-level from state.categories
+    for (const cat of state.categories) {
+      tree[cat.name] = { meta: cat, children: {}, files: [] };
     }
 
+    // Place files into tree
+    for (const f of state.files) {
+      const parts = f.name.split('/');
+      if (parts.length === 1) {
+        // No slash — uncategorized
+        // Leave in _uncategorized bucket (handled separately)
+      } else if (parts.length === 2) {
+        // Category/list
+        const [catName, listName] = parts;
+        const catKey = Object.keys(tree).find(k => k.toLowerCase() === catName.toLowerCase()) || catName;
+        if (!tree[catKey]) tree[catKey] = { meta: { name: catKey, icon: 'folder', color: '#346665' }, children: {}, files: [] };
+        tree[catKey].files.push(f);
+      } else {
+        // Category/Subcategory/list (or deeper)
+        const catName = parts[0];
+        const subName = parts.slice(1, -1).join('/');
+        const catKey = Object.keys(tree).find(k => k.toLowerCase() === catName.toLowerCase()) || catName;
+        if (!tree[catKey]) tree[catKey] = { meta: { name: catKey, icon: 'folder', color: '#346665' }, children: {}, files: [] };
+        if (!tree[catKey].children[subName]) tree[catKey].children[subName] = { files: [] };
+        tree[catKey].children[subName].files.push(f);
+      }
+    }
+
+    return tree;
+  }
+
+  function getUncategorizedFiles() {
+    return state.files.filter(f => {
+      const parts = f.name.split('/');
+      if (parts.length === 1) return true;
+      const catName = parts[0];
+      return !state.categories.some(c => c.name.toLowerCase() === catName.toLowerCase()) &&
+             !state.files.some(f2 => f2 !== f && state.categories.some(c => f2.name.toLowerCase().startsWith(c.name.toLowerCase() + '/')));
+    });
+  }
+
+  function renderCategoryNav() {
+    const el = document.getElementById('category-nav');
+    const tree = buildFolderTree();
     let html = '';
 
     // "All" option
+    const totalCount = state.files.length;
     html += `<div class="category-item flex items-center gap-2.5 px-2.5 py-2 ${state.activeCategory === null ? 'active' : ''}"
       onclick="selectCategory(null)">
       <div class="category-icon" style="background:#ebeeef">
         <span class="material-symbols-outlined" style="font-size:16px;color:#5a6061">apps</span>
       </div>
       <span class="text-xs font-semibold flex-1" style="color:#2d3435">All</span>
-      <span class="category-count" style="background:#ebeeef;color:#5a6061">${state.files.length}</span>
+      <span class="category-count" style="background:#ebeeef;color:#5a6061">${totalCount}</span>
     </div>`;
 
-    // Each category
-    for (const cat of state.categories) {
-      const isActive = state.activeCategory === cat.name;
-      const count = counts[cat.name] || 0;
-      html += `<div class="category-item flex items-center gap-2.5 px-2.5 py-2 ${isActive ? 'active' : ''}"
-        onclick="selectCategory('${escapeAttr(cat.name)}')"
-        oncontextmenu="categoryContextMenu(event, '${escapeAttr(cat.name)}')">
-        <div class="category-icon" style="background:${isActive ? '#b8ecea' : '#ebeeef'}">
-          <span class="material-symbols-outlined" style="font-size:16px;color:${cat.color || '#346665'}">${cat.icon || 'folder'}</span>
-        </div>
-        <span class="text-xs font-semibold flex-1 truncate" style="color:#2d3435">${escapeHtml(cat.name)}</span>
-        <span class="category-count" style="background:${isActive ? '#b8ecea' : '#ebeeef'};color:${isActive ? '#265a58' : '#5a6061'}">${count}</span>
-      </div>`;
+    // Each top-level category
+    for (const [catKey, catData] of Object.entries(tree)) {
+      const isExpanded = state.expandedFolders.has(catKey);
+      const isCatActive = state.activeCategory === catKey;
+      const catCount = catData.files.length + Object.values(catData.children).reduce((s, c) => s + c.files.length, 0);
+      const hasChildren = Object.keys(catData.children).length > 0;
+
+      html += `<div>
+        <div class="category-item flex items-center gap-2 px-2 py-2 ${isCatActive ? 'active' : ''}"
+          onclick="selectCategory('${escapeAttr(catKey)}')"
+          oncontextmenu="categoryContextMenu(event, '${escapeAttr(catKey)}')">
+          <button onclick="event.stopPropagation();toggleFolder('${escapeAttr(catKey)}')" style="background:none;border:none;cursor:pointer;padding:0;width:16px;text-align:center;flex-shrink:0">
+            <span class="material-symbols-outlined" style="font-size:12px;color:#adb3b4">${hasChildren ? (isExpanded ? 'expand_more' : 'chevron_right') : ''}</span>
+          </button>
+          <div class="category-icon shrink-0" style="background:${isCatActive ? '#b8ecea' : '#ebeeef'}">
+            <span class="material-symbols-outlined" style="font-size:16px;color:${catData.meta.color || '#346665'}">${catData.meta.icon || 'folder'}</span>
+          </div>
+          <span class="text-xs font-semibold flex-1 truncate" style="color:#2d3435">${escapeHtml(catKey)}</span>
+          <button onclick="event.stopPropagation();addListToFolder('${escapeAttr(catKey)}')" style="background:none;border:none;cursor:pointer;padding:0;opacity:0.5" title="Add list to ${escapeHtml(catKey)}">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#5a6061">add</span>
+          </button>
+          <span class="category-count" style="background:${isCatActive ? '#b8ecea' : '#ebeeef'};color:${isCatActive ? '#265a58' : '#5a6061'}">${catCount}</span>
+        </div>`;
+
+      // Subcategories (if expanded)
+      if (isExpanded) {
+        // Direct lists in this category
+        for (const f of catData.files) {
+          const displayName = f.name.split('/').pop().replace(/\.md$/, '');
+          const isActive = state.activeCategory === f.name || state.currentFile === f.name;
+          html += `<div class="file-item flex items-center gap-2 pl-9 pr-2 py-1.5 ${state.currentFile === f.name ? 'active' : ''}"
+            onclick="loadFile('${escapeAttr(f.name)}')">
+            <span class="material-symbols-outlined shrink-0" style="font-size:12px;color:#adb3b4">description</span>
+            <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+          </div>`;
+        }
+
+        // Subcategories
+        for (const [subName, subData] of Object.entries(catData.children)) {
+          const subPath = catKey + '/' + subName;
+          const isSubExpanded = state.expandedFolders.has(subPath);
+          const isSubActive = state.activeCategory === subPath;
+
+          html += `<div>
+            <div class="category-item flex items-center gap-2 pl-6 py-1.5 ${isSubActive ? 'active' : ''}"
+              onclick="selectCategory('${escapeAttr(subPath)}')"
+              oncontextmenu="categoryContextMenu(event, '${escapeAttr(subPath)}')">
+              <button onclick="event.stopPropagation();toggleFolder('${escapeAttr(subPath)}')" style="background:none;border:none;cursor:pointer;padding:0;width:14px;text-align:center;flex-shrink:0">
+                <span class="material-symbols-outlined" style="font-size:11px;color:#adb3b4">${isSubExpanded ? 'expand_more' : 'chevron_right'}</span>
+              </button>
+              <span class="material-symbols-outlined shrink-0" style="font-size:14px;color:#adb3b4">folder</span>
+              <span class="text-xs font-medium flex-1 truncate" style="color:#5a6061">${escapeHtml(subName)}</span>
+              <button onclick="event.stopPropagation();addListToFolder('${escapeAttr(subPath)}')" style="background:none;border:none;cursor:pointer;padding:0;opacity:0.5" title="Add list">
+                <span class="material-symbols-outlined" style="font-size:12px;color:#5a6061">add</span>
+              </button>
+              <span class="category-count" style="font-size:9px;background:#ebeeef;color:#5a6061">${subData.files.length}</span>
+            </div>`;
+
+          if (isSubExpanded) {
+            for (const f of subData.files) {
+              const displayName = f.name.split('/').pop().replace(/\.md$/, '');
+              html += `<div class="file-item flex items-center gap-2 pl-12 pr-2 py-1.5 ${state.currentFile === f.name ? 'active' : ''}"
+                onclick="loadFile('${escapeAttr(f.name)}')">
+                <span class="material-symbols-outlined shrink-0" style="font-size:11px;color:#adb3b4">description</span>
+                <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+              </div>`;
+            }
+          }
+          html += '</div>';
+        }
+
+        // Subcategory + list add buttons
+        html += `<div class="flex gap-1 pl-8 py-1">
+          <button onclick="addSubcategoryTo('${escapeAttr(catKey)}')" class="text-xs px-2 py-0.5 rounded hover:bg-stone-200 transition-all" style="color:#adb3b4;background:none;border:none;cursor:pointer">+ subcategory</button>
+        </div>`;
+      }
+
+      html += '</div>';
     }
 
-    // Uncategorized (if any)
-    if (uncategorized > 0) {
+    // Uncategorized
+    const uncatFiles = state.files.filter(f => {
+      const catName = f.name.split('/')[0];
+      return !Object.keys(tree).some(k => k.toLowerCase() === catName.toLowerCase());
+    });
+    if (uncatFiles.length > 0) {
       const isActive = state.activeCategory === '__uncategorized';
       html += `<div class="category-item flex items-center gap-2.5 px-2.5 py-2 ${isActive ? 'active' : ''}"
         onclick="selectCategory('__uncategorized')">
+        <div style="width:16px;flex-shrink:0"></div>
         <div class="category-icon" style="background:#ebeeef">
           <span class="material-symbols-outlined" style="font-size:16px;color:#adb3b4">inbox</span>
         </div>
         <span class="text-xs font-semibold flex-1" style="color:#5a6061">Uncategorized</span>
-        <span class="category-count" style="background:#ebeeef;color:#5a6061">${uncategorized}</span>
+        <span class="category-count" style="background:#ebeeef;color:#5a6061">${uncatFiles.length}</span>
       </div>`;
     }
 
     el.innerHTML = html;
   }
 
+  function toggleFolder(folderPath) {
+    if (state.expandedFolders.has(folderPath)) {
+      state.expandedFolders.delete(folderPath);
+    } else {
+      state.expandedFolders.add(folderPath);
+    }
+    renderCategoryNav();
+  }
+
+  function addListToFolder(folderPath) {
+    const defaultName = folderPath + '/new-list';
+    const name = prompt('New list name:', defaultName);
+    if (!name) return;
+    let fname = name.endsWith('.md') ? name : name + '.md';
+    const segments = fname.replace('.md','').split('/');
+    const title = segments[segments.length - 1];
+    state.currentFile = fname;
+    state.content = '# ' + title + '\n\n- [ ] First task\n';
+    renderContent();
+    updateHeaderFilename();
+    updateMeta();
+    saveCurrentFile(true).then(() => loadFileList());
+    // Expand the folder
+    folderPath.split('/').reduce((acc, part) => {
+      const path = acc ? acc + '/' + part : part;
+      state.expandedFolders.add(path);
+      return path;
+    }, '');
+  }
+
+  function addSubcategoryTo(catName) {
+    const subName = prompt('Subcategory name (e.g. "Lipton" or "HoldFast"):');
+    if (!subName || !subName.trim()) return;
+    const subPath = catName + '/' + subName.trim();
+    // Expand parent
+    state.expandedFolders.add(catName);
+    state.expandedFolders.add(subPath);
+    // Create a default list in that subcategory
+    const listName = subPath + '/tasks';
+    const fname = listName + '.md';
+    state.currentFile = fname;
+    state.content = '# ' + subName.trim() + '\n\n- [ ] First task\n';
+    renderContent();
+    updateHeaderFilename();
+    updateMeta();
+    saveCurrentFile(true).then(() => loadFileList());
+  }
+
+
   function selectCategory(catName) {
     state.activeCategory = catName;
+    // Auto-expand parent folders when selecting a subcategory
+    if (catName && catName !== '__uncategorized') {
+      const parts = catName.split('/');
+      let acc = '';
+      for (const part of parts) {
+        acc = acc ? acc + '/' + part : part;
+        state.expandedFolders.add(acc);
+      }
+    }
     renderCategoryNav();
     renderFileList();
     renderCollections();
-    // Update label
     const label = document.getElementById('file-list-label');
-    if (label) label.textContent = catName && catName !== '__uncategorized' ? catName : 'Lists';
+    if (label) label.textContent = catName && catName !== '__uncategorized' ? catName.split('/').pop() : 'Lists';
   }
 
   function addCategory() {
-    const name = prompt('Category name:');
+    const name = prompt('Category name (use "/" for subcategory, e.g. "Business" or "Business/Lipton"):');
     if (!name || !name.trim()) return;
     const trimmed = name.trim();
-    if (state.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
-      alert('Category already exists');
-      return;
+    const parts = trimmed.split('/');
+    const topLevel = parts[0];
+
+    // Add top-level if doesn't exist
+    if (!state.categories.some(c => c.name.toLowerCase() === topLevel.toLowerCase())) {
+      const icons = ['folder', 'star', 'group', 'build', 'science', 'bookmark', 'label', 'lightbulb'];
+      const colors = ['#346665', '#4b6550', '#275a59', '#5c605f', '#9f403d'];
+      state.categories.push({
+        name: topLevel,
+        icon: icons[state.categories.length % icons.length],
+        color: colors[state.categories.length % colors.length],
+      });
+      saveCategories();
     }
-    const icons = ['folder', 'star', 'group', 'build', 'science', 'bookmark', 'label', 'lightbulb'];
-    const colors = ['#346665', '#4b6550', '#275a59', '#5c605f', '#9f403d'];
-    state.categories.push({
-      name: trimmed,
-      icon: icons[state.categories.length % icons.length],
-      color: colors[state.categories.length % colors.length],
-    });
-    saveCategories();
-    renderCategoryNav();
+
+    // If subcategory path given, create a default list there
+    if (parts.length > 1) {
+      const subPath = trimmed;
+      state.expandedFolders.add(topLevel);
+      state.expandedFolders.add(subPath);
+      const fname = subPath + '/tasks.md';
+      state.currentFile = fname;
+      state.content = '# ' + parts[parts.length-1] + '\n\n- [ ] First task\n';
+      renderContent();
+      updateHeaderFilename();
+      updateMeta();
+      saveCurrentFile(true).then(() => loadFileList());
+    } else {
+      state.expandedFolders.add(topLevel);
+      renderCategoryNav();
+    }
   }
 
   function categoryContextMenu(e, catName) {
@@ -770,16 +945,16 @@
   function getFilteredFiles() {
     if (state.activeCategory === null) return state.files;
     if (state.activeCategory === '__uncategorized') {
+      const tree = buildFolderTree();
       return state.files.filter(f => {
-        return !state.categories.some(cat =>
-          f.name.toLowerCase().startsWith(cat.name.toLowerCase() + '/') ||
-          f.name.toLowerCase() === cat.name.toLowerCase()
-        );
+        const catName = f.name.split('/')[0];
+        return !Object.keys(tree).some(k => k.toLowerCase() === catName.toLowerCase());
       });
     }
+    const activeLC = state.activeCategory.toLowerCase();
     return state.files.filter(f =>
-      f.name.toLowerCase().startsWith(state.activeCategory.toLowerCase() + '/') ||
-      f.name.toLowerCase() === state.activeCategory.toLowerCase()
+      f.name.toLowerCase().startsWith(activeLC + '/') ||
+      f.name.toLowerCase() === activeLC
     );
   }
 
