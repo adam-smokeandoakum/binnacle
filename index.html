@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Binnacle | MD Task Editor</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "background": "#f9f9f9",
+            "on-tertiary": "#e8ffe9",
+            "surface-tint": "#346665",
+            "tertiary-fixed-dim": "#cceacf",
+            "on-surface-variant": "#5a6061",
+            "on-secondary-container": "#4f5252",
+            "on-error-container": "#752121",
+            "on-error": "#fff7f6",
+            "primary-fixed-dim": "#aadedb",
+            "tertiary": "#4b6550",
+            "surface-variant": "#dde4e5",
+            "tertiary-container": "#daf8dd",
+            "surface-container-lowest": "#ffffff",
+            "on-background": "#2d3435",
+            "secondary-container": "#e0e3e2",
+            "on-tertiary-fixed": "#344e3a",
+            "inverse-primary": "#c9fefb",
+            "secondary-dim": "#505453",
+            "error": "#9f403d",
+            "surface": "#f9f9f9",
+            "primary-container": "#b8ecea",
+            "tertiary-dim": "#3f5945",
+            "primary": "#346665",
+            "on-secondary-fixed-variant": "#595c5c",
+            "inverse-on-surface": "#9c9d9d",
+            "primary-dim": "#275a59",
+            "secondary": "#5c605f",
+            "on-surface": "#2d3435",
+            "on-primary-container": "#265a58",
+            "surface-container-low": "#f2f4f4",
+            "secondary-fixed": "#e0e3e2",
+            "secondary-fixed-dim": "#d2d5d4",
+            "on-secondary": "#f7f9f8",
+            "inverse-surface": "#0c0f0f",
+            "on-tertiary-container": "#46604b",
+            "primary-fixed": "#b8ecea",
+            "surface-bright": "#f9f9f9",
+            "on-secondary-fixed": "#3c4040",
+            "surface-dim": "#d4dbdd",
+            "error-dim": "#4e0309",
+            "surface-container": "#ebeeef",
+            "outline": "#757c7d",
+            "surface-container-highest": "#dde4e5",
+            "on-primary-fixed-variant": "#316462",
+            "surface-container-high": "#e4e9ea",
+            "on-tertiary-fixed-variant": "#506b55",
+            "error-container": "#fe8983",
+            "on-primary-fixed": "#0e4745",
+            "outline-variant": "#adb3b4",
+            "on-primary": "#dafffd",
+            "tertiary-fixed": "#daf8dd"
+          },
+          fontFamily: {
+            "headline": ["Manrope"],
+            "body": ["Manrope"],
+            "label": ["Manrope"],
+            "mono": ["JetBrains Mono", "monospace"]
+          },
+          borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+        },
+      },
+    }
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    }
+    body { font-family: 'Manrope', sans-serif; background-color: #f9f9f9; color: #2d3435; }
+    .zen-scroll::-webkit-scrollbar { width: 0px; }
+    .progress-aura {
+      background: radial-gradient(circle at top right, rgba(184, 236, 234, 0.15) 0%, transparent 70%);
+    }
+    .task-item { transition: all 0.15s ease; }
+    .task-item:hover { background-color: #f2f4f4; }
+    .task-item.focused { border-left: 3px solid #346665; }
+    .task-checkbox-btn {
+      width: 22px; height: 22px; border: 2px solid #adb3b4;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0; transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+    .task-checkbox-btn:hover { border-color: #346665; transform: scale(1.1); }
+    .task-checkbox-btn.checked {
+      background-color: #346665; border-color: #346665;
+      animation: checkBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .task-checkbox-btn .check-icon {
+      opacity: 0; transform: scale(0); transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .task-checkbox-btn.checked .check-icon {
+      opacity: 1; transform: scale(1);
+    }
+    @keyframes checkBounce {
+      0% { transform: scale(1); }
+      30% { transform: scale(1.3); }
+      50% { transform: scale(0.9); }
+      70% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    @keyframes taskFadeOut {
+      0% { opacity: 1; transform: translateX(0); }
+      100% { opacity: 0.45; transform: translateX(4px); }
+    }
+    @keyframes taskFadeIn {
+      0% { opacity: 0.45; transform: translateX(4px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    .task-text-checked {
+      animation: taskFadeOut 0.35s ease forwards;
+    }
+    .task-text-unchecked {
+      animation: taskFadeIn 0.3s ease forwards;
+    }
+    @keyframes ripple {
+      0% { width: 0; height: 0; opacity: 0.5; }
+      100% { width: 40px; height: 40px; opacity: 0; }
+    }
+    .check-ripple {
+      position: absolute; border-radius: 50%; background: rgba(52,102,101,0.2);
+      pointer-events: none; animation: ripple 0.5s ease-out forwards;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+    }
+    /* Category nav */
+    .category-item {
+      cursor: pointer; transition: all 0.15s ease; border-radius: 0.5rem;
+      user-select: none;
+    }
+    .category-item:hover { background: #ebeeef; }
+    .category-item.active { background: #daf8dd; }
+    .category-icon { width: 28px; height: 28px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; }
+    .category-count {
+      min-width: 18px; height: 18px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 600;
+    }
+    .file-item { cursor: pointer; transition: background 0.12s; border-radius: 0.25rem; }
+    .file-item:hover { background-color: #ebeeef; }
+    .file-item.active { background-color: #ffffff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .collection-card { transition: all 0.15s ease; cursor: pointer; }
+    .collection-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(52,102,101,0.12); }
+    #source-textarea { resize: none; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; line-height: 1.6; }
+    .save-status { transition: opacity 0.3s ease; }
+    /* Drag and drop */
+    .drag-handle {
+      cursor: grab; opacity: 0; transition: opacity 0.15s;
+      display: flex; align-items: center; padding: 2px;
+    }
+    .task-item:hover .drag-handle { opacity: 0.5; }
+    .drag-handle:hover { opacity: 1 !important; }
+    .task-item.dragging { opacity: 0.35; background: #f2f4f4; }
+    .task-item.drag-over-top { box-shadow: 0 -2px 0 0 #346665; }
+    .task-item.drag-over-bottom { box-shadow: 0 2px 0 0 #346665; }
+    /* Priority */
+    .priority-dot {
+      width: 8px; height: 8px; border-radius: 50%; cursor: pointer;
+      transition: all 0.2s; flex-shrink: 0; margin-top: 6px;
+    }
+    .priority-dot:hover { transform: scale(1.6); }
+    .priority-high { background: #9f403d; box-shadow: 0 0 4px rgba(159,64,61,0.4); }
+    .priority-medium { background: #d4a017; }
+    .priority-low { background: #346665; }
+    .priority-none { background: #dde4e5; }
+    .blur-blob-1 {
+      position: fixed; bottom: -80px; left: -80px; width: 320px; height: 320px;
+      background: radial-gradient(circle, rgba(218,248,221,0.45) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    .blur-blob-2 {
+      position: fixed; top: -60px; right: -60px; width: 280px; height: 280px;
+      background: radial-gradient(circle, rgba(184,236,234,0.35) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    #auth-screen {
+      position: fixed; inset: 0; z-index: 100;
+      background: linear-gradient(135deg, #f9f9f9 0%, #f2f4f4 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .auth-card {
+      background: white; border-radius: 1rem; padding: 2.5rem;
+      box-shadow: 0 8px 32px rgba(52,102,101,0.12);
+      width: 100%; max-width: 400px;
+    }
+    h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    .toggle-btn { transition: all 0.15s; }
+    .toggle-btn.active { background: #346665; color: #dafffd; }
+  </style>
+</head>
+<body class="h-screen overflow-hidden flex flex-col">
+
+  <!-- Decorative blobs -->
+  <div class="blur-blob-1"></div>
+  <div class="blur-blob-2"></div>
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen">
+    <div class="auth-card">
+      <div class="flex items-center gap-3 mb-8">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:#346665">
+          <span class="material-symbols-outlined text-white" style="font-size:20px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20">check_circle</span>
+        </div>
+        <div>
+          <div class="font-bold text-xl tracking-tight" style="color:#346665">Binnacle</div>
+          <div class="text-xs" style="color:#5a6061">MD Task Editor</div>
+        </div>
+      </div>
+
+      <div id="auth-email-view">
+        <h2 class="text-lg font-semibold mb-1" style="color:#2d3435">Sign in to Binnacle</h2>
+        <p class="text-sm mb-6" style="color:#5a6061">Enter your email to receive a magic link, or continue anonymously.</p>
+        <div class="flex flex-col gap-3">
+          <input id="auth-email-input" type="email" placeholder="you@example.com"
+            class="w-full px-4 py-2.5 rounded-lg border text-sm outline-none focus:ring-2"
+            style="border-color:#adb3b4;font-family:'Manrope',sans-serif;focus:ring-color:#346665"/>
+          <button id="auth-send-btn" onclick="sendMagicLink()"
+            class="w-full py-2.5 rounded-lg text-sm font-semibold transition-all"
+            style="background:#346665;color:#dafffd">
+            Send Magic Link
+          </button>
+          <div class="flex items-center gap-2 my-1">
+            <div class="flex-1 h-px" style="background:#dde4e5"></div>
+            <span class="text-xs" style="color:#adb3b4">or</span>
+            <div class="flex-1 h-px" style="background:#dde4e5"></div>
+          </div>
+          <button onclick="continueAnonymous()"
+            class="w-full py-2.5 rounded-lg text-sm font-medium border transition-all hover:bg-gray-50"
+            style="border-color:#adb3b4;color:#5a6061">
+            Continue Anonymously
+          </button>
+        </div>
+        <div id="auth-error" class="mt-3 text-sm hidden" style="color:#9f403d"></div>
+      </div>
+
+      <div id="auth-check-email" class="hidden text-center">
+        <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style="background:#daf8dd">
+          <span class="material-symbols-outlined" style="color:#346665;font-size:28px">mail</span>
+        </div>
+        <h2 class="text-lg font-semibold mb-2" style="color:#2d3435">Check your email</h2>
+        <p class="text-sm" style="color:#5a6061">We sent a magic link to <strong id="auth-sent-to"></strong>. Click it to sign in.</p>
+        <button onclick="resetAuthView()" class="mt-6 text-sm underline" style="color:#346665">Use a different email</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="app" class="hidden h-screen flex flex-col" style="position:relative;z-index:1">
+
+    <!-- HEADER -->
+    <header class="flex items-center gap-3 px-4 py-3 border-b shrink-0" style="background:white;border-color:#dde4e5;z-index:10">
+      <!-- Brand -->
+      <div class="flex items-center gap-2 mr-2">
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style="background:#346665">
+          <span class="material-symbols-outlined text-white" style="font-size:16px;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20">check_circle</span>
+        </div>
+        <span class="font-bold text-base tracking-tight hidden sm:block" style="color:#346665">Binnacle</span>
+      </div>
+
+      <!-- Current filename -->
+      <div id="header-filename" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono shrink-0"
+        style="background:#ebeeef;color:#5a6061;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
+        <span class="material-symbols-outlined" style="font-size:13px">description</span>
+        <span id="header-filename-text">no file</span>
+      </div>
+
+      <!-- Save status -->
+      <div id="save-status" class="save-status text-xs" style="color:#adb3b4">
+        <span id="save-status-text"></span>
+      </div>
+
+      <div class="flex-1"></div>
+
+      <!-- Preview / Source toggle -->
+      <div class="flex rounded-lg overflow-hidden border shrink-0" style="border-color:#dde4e5">
+        <button id="toggle-preview" onclick="setMode('preview')"
+          class="toggle-btn active px-3 py-1.5 text-xs font-medium flex items-center gap-1">
+          <span class="material-symbols-outlined" style="font-size:14px">visibility</span>
+          <span class="hidden sm:inline">Preview</span>
+        </button>
+        <button id="toggle-source" onclick="setMode('source')"
+          class="toggle-btn px-3 py-1.5 text-xs font-medium flex items-center gap-1"
+          style="color:#5a6061">
+          <span class="material-symbols-outlined" style="font-size:14px">code</span>
+          <span class="hidden sm:inline">Source</span>
+        </button>
+      </div>
+
+      <!-- Open button -->
+      <label class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all hover:bg-gray-50 border shrink-0"
+        style="border-color:#dde4e5;color:#5a6061" title="Open .md file">
+        <span class="material-symbols-outlined" style="font-size:15px">folder_open</span>
+        <span class="hidden sm:inline">Open</span>
+        <input type="file" accept=".md" class="hidden" onchange="openLocalFile(this)"/>
+      </label>
+
+      <!-- Save button -->
+      <button onclick="saveCurrentFile()" title="Save"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0"
+        style="background:#346665;color:#dafffd">
+        <span class="material-symbols-outlined" style="font-size:15px">save</span>
+        <span class="hidden sm:inline">Save</span>
+      </button>
+
+      <!-- New tab -->
+      <button onclick="openNewTab()" title="Open new tab"
+        class="flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-gray-50 shrink-0"
+        style="border-color:#dde4e5;color:#5a6061">
+        <span class="material-symbols-outlined" style="font-size:16px">add</span>
+      </button>
+    </header>
+
+    <!-- BODY: sidebar + main -->
+    <div class="flex flex-1 overflow-hidden">
+
+      <!-- SIDEBAR -->
+      <aside class="w-60 flex flex-col border-r shrink-0 zen-scroll overflow-y-auto" style="background:#f9f9f9;border-color:#dde4e5">
+        <!-- Categories -->
+        <div class="px-3 pt-4 pb-2">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-semibold uppercase tracking-widest" style="color:#adb3b4">Categories</span>
+            <button onclick="addCategory()" class="flex items-center justify-center w-5 h-5 rounded hover:bg-gray-200 transition-all" title="Add category">
+              <span class="material-symbols-outlined" style="font-size:14px;color:#adb3b4">add</span>
+            </button>
+          </div>
+          <div id="category-nav" class="flex flex-col gap-1 mb-3">
+            <!-- Categories rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div class="mx-3 mb-2" style="height:1px;background:#ebeeef"></div>
+
+        <!-- Files in current category -->
+        <div class="px-3 pb-2">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold uppercase tracking-widest" style="color:#adb3b4" id="file-list-label">Lists</span>
+          </div>
+          <div id="file-list" class="flex flex-col gap-0.5">
+            <!-- Files populated by JS -->
+          </div>
+        </div>
+
+        <!-- New List -->
+        <div class="px-3 mt-1 flex flex-col gap-0.5">
+          <button onclick="createNewFile()"
+            class="flex items-center gap-2 px-2 py-2 rounded-lg text-xs font-medium w-full text-left transition-all hover:bg-gray-100"
+            style="color:#346665">
+            <span class="material-symbols-outlined" style="font-size:16px">add_circle</span>
+            + New List
+          </button>
+        </div>
+
+        <div class="flex-1"></div>
+
+        <!-- Vault Meta -->
+        <div class="mx-3 mb-4 mt-4 p-3 rounded-xl" style="background:#ebeeef">
+          <div class="text-xs font-semibold mb-2" style="color:#5a6061">Vault Meta</div>
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between text-xs">
+              <span style="color:#adb3b4">Chars</span>
+              <span id="meta-chars" class="font-mono font-medium" style="color:#2d3435">0</span>
+            </div>
+            <div class="flex justify-between text-xs">
+              <span style="color:#adb3b4">Words</span>
+              <span id="meta-words" class="font-mono font-medium" style="color:#2d3435">0</span>
+            </div>
+            <div class="flex justify-between text-xs">
+              <span style="color:#adb3b4">Last Sync</span>
+              <span id="meta-sync" class="font-mono font-medium" style="color:#2d3435">—</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT -->
+      <main class="flex-1 flex flex-col overflow-hidden progress-aura" style="position:relative">
+        <div class="flex-1 overflow-y-auto zen-scroll px-6 pt-6 pb-4" id="main-scroll">
+
+          <!-- Date header -->
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <div class="text-2xl font-bold" style="color:#2d3435" id="date-display">Today</div>
+              <div class="text-sm" style="color:#adb3b4" id="date-sub"></div>
+            </div>
+            <div class="text-xs px-2.5 py-1 rounded-full" style="background:#daf8dd;color:#46604b" id="task-count-badge">
+              0 tasks
+            </div>
+          </div>
+
+          <!-- PREVIEW VIEW -->
+          <div id="preview-view">
+            <div id="task-list" class="flex flex-col mb-6">
+              <!-- tasks rendered here -->
+            </div>
+
+            <!-- New task input -->
+            <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 border-dashed transition-all focus-within:border-primary"
+              style="border-color:#dde4e5;margin-bottom:2rem">
+              <span class="material-symbols-outlined" style="color:#adb3b4;font-size:18px">add_task</span>
+              <input id="new-task-input" type="text" placeholder="Add a task… (press Enter)"
+                class="flex-1 text-sm outline-none bg-transparent"
+                style="font-family:'Manrope',sans-serif;color:#2d3435"
+                onkeydown="handleNewTask(event)"/>
+            </div>
+
+            <!-- Collections -->
+            <div class="mb-2">
+              <div class="flex items-center gap-2 mb-4">
+                <span class="material-symbols-outlined" style="color:#346665;font-size:18px">grid_view</span>
+                <span class="text-sm font-semibold" style="color:#2d3435">Collections</span>
+              </div>
+              <div id="collections-grid" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <!-- collection cards here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- SOURCE VIEW -->
+          <div id="source-view" class="hidden flex-col h-full">
+            <textarea id="source-textarea"
+              class="w-full h-full min-h-96 p-4 rounded-xl border outline-none focus:ring-2 focus:ring-primary flex-1"
+              style="border-color:#dde4e5;background:white;color:#2d3435;resize:vertical;min-height:60vh"
+              oninput="onSourceChange()"
+              placeholder="# My Tasks&#10;&#10;- [ ] Task one&#10;- [ ] Task two&#10;- [x] Completed task"></textarea>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+  // ─── STATE ───────────────────────────────────────────────────────────────────
+  const API = '';  // relative — served from same origin
+  const DEFAULT_CATEGORIES = [
+    { name: 'Business', icon: 'work', color: '#346665' },
+    { name: 'Creative', icon: 'palette', color: '#4b6550' },
+    { name: 'Tech', icon: 'terminal', color: '#275a59' },
+  ];
+
+  let state = {
+    token: null,
+    files: [],
+    currentFile: null,
+    content: '',
+    mode: 'preview',
+    lastSaved: null,
+    saveTimer: null,
+    syncTimer: null,
+    categories: [...DEFAULT_CATEGORIES],
+    activeCategory: null,  // null = show all
+  };
+
+  // ─── INIT ─────────────────────────────────────────────────────────────────────
+  async function init() {
+    // Check for ?t= param
+    const params = new URLSearchParams(window.location.search);
+    const tParam = params.get('t');
+    if (tParam) {
+      state.token = tParam;
+      localStorage.setItem('binnacle_token', tParam);
+      // Remove from URL
+      const url = new URL(window.location);
+      url.searchParams.delete('t');
+      window.history.replaceState({}, '', url.toString());
+    } else {
+      state.token = localStorage.getItem('binnacle_token');
+    }
+
+    if (state.token) {
+      showApp();
+    } else {
+      showAuthScreen();
+    }
+  }
+
+  function showAuthScreen() {
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app').classList.add('hidden');
+  }
+
+  async function showApp() {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').classList.remove('hidden');
+    loadCategories();
+    updateDateDisplay();
+    renderCategoryNav();
+    await loadFileList();
+    startSyncTimer();
+  }
+
+  // ─── AUTH ─────────────────────────────────────────────────────────────────────
+  async function sendMagicLink() {
+    const email = document.getElementById('auth-email-input').value.trim();
+    if (!email) return;
+    const btn = document.getElementById('auth-send-btn');
+    btn.textContent = 'Sending...';
+    btn.disabled = true;
+    try {
+      const res = await fetch('api/auth/send-link', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email}),
+      });
+      if (!res.ok) throw new Error('Failed to send');
+      document.getElementById('auth-sent-to').textContent = email;
+      document.getElementById('auth-email-view').classList.add('hidden');
+      document.getElementById('auth-check-email').classList.remove('hidden');
+    } catch(e) {
+      const errEl = document.getElementById('auth-error');
+      errEl.textContent = 'Could not send link. Please try again.';
+      errEl.classList.remove('hidden');
+    } finally {
+      btn.textContent = 'Send Magic Link';
+      btn.disabled = false;
+    }
+  }
+
+  async function continueAnonymous() {
+    try {
+      const res = await fetch('api/new');
+      const data = await res.json();
+      state.token = data.token;
+      localStorage.setItem('binnacle_token', data.token);
+      showApp();
+    } catch(e) {
+      // Fallback: use a local UUID as token
+      state.token = 'anon_' + Math.random().toString(36).slice(2);
+      localStorage.setItem('binnacle_token', state.token);
+      showApp();
+    }
+  }
+
+  function resetAuthView() {
+    document.getElementById('auth-email-view').classList.remove('hidden');
+    document.getElementById('auth-check-email').classList.add('hidden');
+    document.getElementById('auth-error').classList.add('hidden');
+    document.getElementById('auth-email-input').value = '';
+  }
+
+  // ─── FILE LIST ────────────────────────────────────────────────────────────────
+  async function loadFileList() {
+    try {
+      const res = await fetch(`api/lists/${state.token}`);
+      const data = await res.json();
+      state.files = data.files || [];
+    } catch(e) {
+      state.files = [];
+    }
+    renderCategoryNav();
+    renderFileList();
+    renderCollections();
+
+    // Auto-load first file
+    if (state.files.length > 0 && !state.currentFile) {
+      await loadFile(state.files[0].name);
+    } else if (state.files.length === 0) {
+      // Start with empty default
+      state.currentFile = 'tasks.md';
+      state.content = '# My Tasks\n\n- [ ] Welcome to Binnacle\n- [ ] Create your first task\n- [x] Open Binnacle\n';
+      renderContent();
+      updateHeaderFilename();
+      updateMeta();
+    }
+  }
+
+  // ─── CATEGORIES ──────────────────────────────────────────────────────────────
+  function loadCategories() {
+    const saved = localStorage.getItem('binnacle_categories_' + state.token);
+    if (saved) {
+      try { state.categories = JSON.parse(saved); } catch(e) {}
+    }
+  }
+
+  function saveCategories() {
+    localStorage.setItem('binnacle_categories_' + state.token, JSON.stringify(state.categories));
+  }
+
+  function renderCategoryNav() {
+    const el = document.getElementById('category-nav');
+    const catIcons = { work: 'work', palette: 'palette', terminal: 'terminal', folder: 'folder', star: 'star', group: 'group', build: 'build', science: 'science' };
+
+    // Count files per category
+    const counts = {};
+    for (const cat of state.categories) counts[cat.name] = 0;
+    let uncategorized = 0;
+    for (const f of state.files) {
+      let matched = false;
+      for (const cat of state.categories) {
+        if (f.name.toLowerCase().startsWith(cat.name.toLowerCase() + '/') ||
+            f.name.toLowerCase() === cat.name.toLowerCase()) {
+          counts[cat.name] = (counts[cat.name] || 0) + 1;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) uncategorized++;
+    }
+
+    let html = '';
+
+    // "All" option
+    html += `<div class="category-item flex items-center gap-2.5 px-2.5 py-2 ${state.activeCategory === null ? 'active' : ''}"
+      onclick="selectCategory(null)">
+      <div class="category-icon" style="background:#ebeeef">
+        <span class="material-symbols-outlined" style="font-size:16px;color:#5a6061">apps</span>
+      </div>
+      <span class="text-xs font-semibold flex-1" style="color:#2d3435">All</span>
+      <span class="category-count" style="background:#ebeeef;color:#5a6061">${state.files.length}</span>
+    </div>`;
+
+    // Each category
+    for (const cat of state.categories) {
+      const isActive = state.activeCategory === cat.name;
+      const count = counts[cat.name] || 0;
+      html += `<div class="category-item flex items-center gap-2.5 px-2.5 py-2 ${isActive ? 'active' : ''}"
+        onclick="selectCategory('${escapeAttr(cat.name)}')"
+        oncontextmenu="categoryContextMenu(event, '${escapeAttr(cat.name)}')">
+        <div class="category-icon" style="background:${isActive ? '#b8ecea' : '#ebeeef'}">
+          <span class="material-symbols-outlined" style="font-size:16px;color:${cat.color || '#346665'}">${cat.icon || 'folder'}</span>
+        </div>
+        <span class="text-xs font-semibold flex-1 truncate" style="color:#2d3435">${escapeHtml(cat.name)}</span>
+        <span class="category-count" style="background:${isActive ? '#b8ecea' : '#ebeeef'};color:${isActive ? '#265a58' : '#5a6061'}">${count}</span>
+      </div>`;
+    }
+
+    // Uncategorized (if any)
+    if (uncategorized > 0) {
+      const isActive = state.activeCategory === '__uncategorized';
+      html += `<div class="category-item flex items-center gap-2.5 px-2.5 py-2 ${isActive ? 'active' : ''}"
+        onclick="selectCategory('__uncategorized')">
+        <div class="category-icon" style="background:#ebeeef">
+          <span class="material-symbols-outlined" style="font-size:16px;color:#adb3b4">inbox</span>
+        </div>
+        <span class="text-xs font-semibold flex-1" style="color:#5a6061">Uncategorized</span>
+        <span class="category-count" style="background:#ebeeef;color:#5a6061">${uncategorized}</span>
+      </div>`;
+    }
+
+    el.innerHTML = html;
+  }
+
+  function selectCategory(catName) {
+    state.activeCategory = catName;
+    renderCategoryNav();
+    renderFileList();
+    renderCollections();
+    // Update label
+    const label = document.getElementById('file-list-label');
+    if (label) label.textContent = catName && catName !== '__uncategorized' ? catName : 'Lists';
+  }
+
+  function addCategory() {
+    const name = prompt('Category name:');
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    if (state.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+      alert('Category already exists');
+      return;
+    }
+    const icons = ['folder', 'star', 'group', 'build', 'science', 'bookmark', 'label', 'lightbulb'];
+    const colors = ['#346665', '#4b6550', '#275a59', '#5c605f', '#9f403d'];
+    state.categories.push({
+      name: trimmed,
+      icon: icons[state.categories.length % icons.length],
+      color: colors[state.categories.length % colors.length],
+    });
+    saveCategories();
+    renderCategoryNav();
+  }
+
+  function categoryContextMenu(e, catName) {
+    e.preventDefault();
+    if (confirm(`Remove category "${catName}"? (Lists inside it won't be deleted)`)) {
+      state.categories = state.categories.filter(c => c.name !== catName);
+      saveCategories();
+      if (state.activeCategory === catName) state.activeCategory = null;
+      renderCategoryNav();
+      renderFileList();
+    }
+  }
+
+  // ─── FILE LIST (filtered by category) ──────────────────────────────────────
+  function getFilteredFiles() {
+    if (state.activeCategory === null) return state.files;
+    if (state.activeCategory === '__uncategorized') {
+      return state.files.filter(f => {
+        return !state.categories.some(cat =>
+          f.name.toLowerCase().startsWith(cat.name.toLowerCase() + '/') ||
+          f.name.toLowerCase() === cat.name.toLowerCase()
+        );
+      });
+    }
+    return state.files.filter(f =>
+      f.name.toLowerCase().startsWith(state.activeCategory.toLowerCase() + '/') ||
+      f.name.toLowerCase() === state.activeCategory.toLowerCase()
+    );
+  }
+
+  function renderFileList() {
+    const el = document.getElementById('file-list');
+    const filtered = getFilteredFiles();
+
+    if (filtered.length === 0) {
+      el.innerHTML = '<div class="text-xs px-2 py-1" style="color:#adb3b4">No lists here yet</div>';
+      return;
+    }
+
+    let html = '';
+    for (const f of filtered) {
+      // Show short name (strip category prefix if viewing a category)
+      let displayName = f.name;
+      if (state.activeCategory && state.activeCategory !== '__uncategorized') {
+        const prefix = state.activeCategory.toLowerCase() + '/';
+        if (f.name.toLowerCase().startsWith(prefix)) {
+          displayName = f.name.substring(prefix.length);
+        }
+      }
+      html += `<div class="file-item flex items-center gap-2 px-2 py-2 ${state.currentFile === f.name ? 'active' : ''}"
+        onclick="loadFile('${escapeAttr(f.name)}')">
+        <span class="material-symbols-outlined shrink-0" style="font-size:14px;color:#adb3b4">description</span>
+        <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+      </div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  async function loadFile(name) {
+    try {
+      const res = await fetch(`api/lists/${state.token}/${encodeURIComponent(name)}`);
+      if (!res.ok) throw new Error('Not found');
+      const text = await res.text();
+      state.currentFile = name;
+      state.content = text;
+      renderContent();
+      updateHeaderFilename();
+      updateMeta();
+      renderFileList();
+      renderCollections();
+    } catch(e) {
+      console.error('Load file error', e);
+    }
+  }
+
+  async function createNewFile() {
+    const catPrefix = (state.activeCategory && state.activeCategory !== '__uncategorized') ? state.activeCategory + '/' : '';
+    const placeholder = catPrefix ? `e.g. ${catPrefix}new-list` : 'e.g. work or Business/new-list';
+    const name = prompt(`Enter file name (${placeholder}):`);
+    if (!name) return;
+    let fname = name.endsWith('.md') ? name : name + '.md';
+    // Auto-prefix category if not already included
+    if (catPrefix && !fname.toLowerCase().startsWith(catPrefix.toLowerCase())) {
+      fname = catPrefix + fname;
+    }
+    // Derive display title: last segment without .md
+    const segments = fname.replace('.md','').split('/');
+    const title = segments[segments.length - 1];
+    state.currentFile = fname;
+    state.content = `# ${title}\n\n- [ ] First task\n`;
+    renderContent();
+    updateHeaderFilename();
+    updateMeta();
+    await saveCurrentFile(true);
+    await loadFileList();
+  }
+
+  // ─── FILE IO ──────────────────────────────────────────────────────────────────
+  async function saveCurrentFile(silent = false) {
+    if (!state.currentFile) return;
+    if (!silent) setSaveStatus('Saving...');
+    try {
+      await fetch(`api/lists/${state.token}/${encodeURIComponent(state.currentFile)}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'text/plain'},
+        body: state.content,
+      });
+      state.lastSaved = Date.now();
+      setSaveStatus('Saved');
+      updateMetaSync();
+      // Refresh file list silently
+      try {
+        const res = await fetch(`api/lists/${state.token}`);
+        const data = await res.json();
+        state.files = data.files || [];
+        renderCategoryNav();
+        renderFileList();
+        renderCollections();
+      } catch(_) {}
+    } catch(e) {
+      setSaveStatus('Error saving');
+    }
+  }
+
+  function openLocalFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target.result;
+      state.currentFile = file.name;
+      state.content = text;
+      renderContent();
+      updateHeaderFilename();
+      updateMeta();
+      await saveCurrentFile(true);
+      await loadFileList();
+    };
+    reader.readAsText(file);
+    input.value = '';
+  }
+
+  // ─── CONTENT RENDERING ────────────────────────────────────────────────────────
+  function renderContent() {
+    if (state.mode === 'preview') {
+      renderPreview();
+    } else {
+      document.getElementById('source-textarea').value = state.content;
+    }
+    updateTaskCountBadge();
+  }
+
+  function renderPreview() {
+    const lines = state.content.split('\n');
+    const taskListEl = document.getElementById('task-list');
+    let html = '';
+    let taskIndex = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const unchecked = line.match(/^- \[ \] (.+)$/);
+      const checked = line.match(/^- \[x\] (.+)$/i);
+
+      if (unchecked || checked) {
+        const isChecked = !!checked;
+        const rawText = isChecked ? checked[1] : unchecked[1];
+        const idx = taskIndex;
+        // Parse priority markers: !!! = high, !! = medium, ! = low
+        let displayText = rawText;
+        let priority = 'none';
+        if (rawText.startsWith('!!! ')) { priority = 'high'; displayText = rawText.substring(4); }
+        else if (rawText.startsWith('!! ')) { priority = 'medium'; displayText = rawText.substring(3); }
+        else if (rawText.startsWith('! ')) { priority = 'low'; displayText = rawText.substring(2); }
+        html += `
+          <div class="task-item flex items-start gap-2 px-3 py-2.5 rounded-xl mb-1 group" data-line="${i}" id="task-row-${i}"
+            draggable="true" ondragstart="onDragStart(event,${i})" ondragover="onDragOver(event,${i})" ondrop="onDrop(event,${i})" ondragend="onDragEnd(event)">
+            <div class="drag-handle mt-1" title="Drag to reorder">
+              <span class="material-symbols-outlined" style="font-size:14px;color:#adb3b4">drag_indicator</span>
+            </div>
+            <div class="task-checkbox-btn mt-0.5 ${isChecked ? 'checked' : ''}" onclick="toggleTask(${i}, this)" title="Toggle task">
+              <span class="material-symbols-outlined check-icon" style="font-size:14px;color:white;font-variation-settings:'FILL' 1,'wght' 500">check</span>
+            </div>
+            <div class="priority-dot priority-${priority}" onclick="cyclePriority(${i})" title="Click to set priority (none → low → medium → high)"></div>
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-sm task-text" style="font-family:'JetBrains Mono',monospace;color:#2d3435;word-break:break-word;transition:opacity 0.3s ease, text-decoration 0.3s ease;${isChecked ? 'opacity:0.45;text-decoration:line-through' : ''}">${escapeHtml(displayText)}</span>
+            </div>
+          </div>
+        `;
+        taskIndex++;
+      } else if (line.match(/^#{1,6} /)) {
+        const m = line.match(/^(#{1,6}) (.+)$/);
+        if (m) {
+          const level = m[1].length;
+          const sizes = ['text-2xl','text-xl','text-lg','text-base','text-sm','text-xs'];
+          const weights = ['font-bold','font-bold','font-semibold','font-semibold','font-medium','font-medium'];
+          html += `<div class="${sizes[level-1]} ${weights[level-1]} mt-4 mb-2" style="color:#2d3435">${escapeHtml(m[2])}</div>`;
+        }
+      } else if (line.trim() === '') {
+        html += `<div class="h-2"></div>`;
+      } else {
+        html += `<div class="text-sm mb-1" style="color:#5a6061">${escapeHtml(line)}</div>`;
+      }
+    }
+
+    taskListEl.innerHTML = html || '<div class="text-sm" style="color:#adb3b4">No content yet. Add a task below.</div>';
+  }
+
+  function toggleTask(lineIndex, btnEl) {
+    const lines = state.content.split('\n');
+    if (lineIndex >= lines.length) return;
+    const line = lines[lineIndex];
+    const wasUnchecked = line.match(/^- \[ \] /);
+
+    if (wasUnchecked) {
+      lines[lineIndex] = line.replace(/^- \[ \] /, '- [x] ');
+    } else if (line.match(/^- \[x\] /i)) {
+      lines[lineIndex] = line.replace(/^- \[x\] /i, '- [ ] ');
+    }
+    state.content = lines.join('\n');
+
+    // Animate in-place instead of full re-render
+    if (btnEl) {
+      const row = document.getElementById(`task-row-${lineIndex}`);
+      const textEl = row ? row.querySelector('.task-text') : null;
+
+      if (wasUnchecked) {
+        // Checking off — bounce + ripple + fade text
+        btnEl.classList.add('checked');
+        // Add ripple
+        const ripple = document.createElement('div');
+        ripple.className = 'check-ripple';
+        btnEl.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+        if (textEl) {
+          textEl.style.opacity = '0.45';
+          textEl.style.textDecoration = 'line-through';
+          textEl.classList.add('task-text-checked');
+          textEl.classList.remove('task-text-unchecked');
+        }
+      } else {
+        // Unchecking — restore
+        btnEl.classList.remove('checked');
+        if (textEl) {
+          textEl.style.opacity = '1';
+          textEl.style.textDecoration = 'none';
+          textEl.classList.add('task-text-unchecked');
+          textEl.classList.remove('task-text-checked');
+        }
+      }
+    } else {
+      renderPreview();
+    }
+
+    updateTaskCountBadge();
+    updateMeta();
+    scheduleSave();
+  }
+
+  function handleNewTask(e) {
+    if (e.key !== 'Enter') return;
+    const input = document.getElementById('new-task-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    // Append to content
+    if (state.content && !state.content.endsWith('\n')) {
+      state.content += '\n';
+    }
+    state.content += `- [ ] ${text}\n`;
+    renderPreview();
+    updateTaskCountBadge();
+    updateMeta();
+    scheduleSave();
+  }
+
+  function onSourceChange() {
+    state.content = document.getElementById('source-textarea').value;
+    updateTaskCountBadge();
+    updateMeta();
+    scheduleSave();
+  }
+
+  // ─── MODE TOGGLE ──────────────────────────────────────────────────────────────
+  function setMode(mode) {
+    state.mode = mode;
+    const previewBtn = document.getElementById('toggle-preview');
+    const sourceBtn = document.getElementById('toggle-source');
+    const previewView = document.getElementById('preview-view');
+    const sourceView = document.getElementById('source-view');
+
+    if (mode === 'preview') {
+      previewBtn.classList.add('active');
+      previewBtn.style.color = '';
+      sourceBtn.classList.remove('active');
+      sourceBtn.style.color = '#5a6061';
+      previewView.classList.remove('hidden');
+      sourceView.classList.add('hidden');
+      renderPreview();
+    } else {
+      sourceBtn.classList.add('active');
+      sourceBtn.style.color = '';
+      previewBtn.classList.remove('active');
+      previewBtn.style.color = '#5a6061';
+      sourceView.classList.remove('hidden');
+      previewView.classList.add('hidden');
+      document.getElementById('source-textarea').value = state.content;
+    }
+  }
+
+  // ─── COLLECTIONS ─────────────────────────────────────────────────────────────
+  function renderCollections() {
+    const grid = document.getElementById('collections-grid');
+    const filtered = getFilteredFiles();
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="text-xs col-span-3" style="color:#adb3b4">No collections yet.</div>';
+      return;
+    }
+
+    const icons = ['task_alt','checklist','article','list','bookmark','star','label','folder'];
+    grid.innerHTML = filtered.map((f, i) => {
+      const icon = icons[i % icons.length];
+      // Show short name
+      let displayName = f.name;
+      if (state.activeCategory && state.activeCategory !== '__uncategorized') {
+        const prefix = state.activeCategory.toLowerCase() + '/';
+        if (f.name.toLowerCase().startsWith(prefix)) displayName = f.name.substring(prefix.length);
+      }
+      return `
+        <div class="collection-card bg-white rounded-xl p-3" style="box-shadow:0 1px 4px rgba(52,102,101,0.06)" onclick="loadFile('${escapeAttr(f.name)}')">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:#daf8dd">
+              <span class="material-symbols-outlined" style="font-size:16px;color:#346665">${icon}</span>
+            </div>
+            <span class="text-xs font-mono font-medium truncate" style="color:#2d3435">${escapeHtml(displayName)}</span>
+          </div>
+          <div class="text-xs" style="color:#adb3b4">${formatSize(f.size)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ─── AUTO-SAVE ────────────────────────────────────────────────────────────────
+  function scheduleSave() {
+    clearTimeout(state.saveTimer);
+    setSaveStatus('Unsaved');
+    state.saveTimer = setTimeout(() => saveCurrentFile(), 2000);
+  }
+
+  function setSaveStatus(msg) {
+    const el = document.getElementById('save-status-text');
+    if (el) el.textContent = msg;
+    const wrapper = document.getElementById('save-status');
+    if (msg === 'Saved') {
+      wrapper.style.color = '#346665';
+    } else if (msg === 'Unsaved') {
+      wrapper.style.color = '#adb3b4';
+    } else if (msg === 'Saving...') {
+      wrapper.style.color = '#adb3b4';
+    } else {
+      wrapper.style.color = '#9f403d';
+    }
+  }
+
+  // ─── VAULT META ───────────────────────────────────────────────────────────────
+  function updateMeta() {
+    const c = state.content;
+    document.getElementById('meta-chars').textContent = c.length.toLocaleString();
+    const words = c.trim() ? c.trim().split(/\s+/).length : 0;
+    document.getElementById('meta-words').textContent = words.toLocaleString();
+    updateMetaSync();
+  }
+
+  function updateMetaSync() {
+    if (!state.lastSaved) {
+      document.getElementById('meta-sync').textContent = '—';
+      return;
+    }
+    const diff = Math.floor((Date.now() - state.lastSaved) / 1000);
+    if (diff < 5) document.getElementById('meta-sync').textContent = 'just now';
+    else if (diff < 60) document.getElementById('meta-sync').textContent = `${diff}s ago`;
+    else if (diff < 3600) document.getElementById('meta-sync').textContent = `${Math.floor(diff/60)}m ago`;
+    else document.getElementById('meta-sync').textContent = `${Math.floor(diff/3600)}h ago`;
+  }
+
+  function startSyncTimer() {
+    clearInterval(state.syncTimer);
+    state.syncTimer = setInterval(updateMetaSync, 10000);
+  }
+
+  // ─── TASK COUNT ───────────────────────────────────────────────────────────────
+  function updateTaskCountBadge() {
+    const total = (state.content.match(/^- \[[ x]\] /gm) || []).length;
+    const done = (state.content.match(/^- \[x\] /gmi) || []).length;
+    const badge = document.getElementById('task-count-badge');
+    badge.textContent = `${done}/${total} tasks`;
+  }
+
+  // ─── DATE DISPLAY ─────────────────────────────────────────────────────────────
+  function updateDateDisplay() {
+    const now = new Date();
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('date-display').textContent = days[now.getDay()];
+    document.getElementById('date-sub').textContent = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+  }
+
+  // ─── HEADER ───────────────────────────────────────────────────────────────────
+  function updateHeaderFilename() {
+    document.getElementById('header-filename-text').textContent = state.currentFile || 'no file';
+    document.title = `Binnacle | ${state.currentFile || 'MD Task Editor'}`;
+  }
+
+  // ─── NEW TAB ──────────────────────────────────────────────────────────────────
+  function openNewTab() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('t', state.token);
+    url.searchParams.set('new', '1');
+    window.open(url.toString(), '_blank');
+  }
+
+  // ─── UTILS ───────────────────────────────────────────────────────────────────
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+  function escapeAttr(str) {
+    return String(str).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  }
+  function formatSize(bytes) {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    return (bytes/1024).toFixed(1) + ' KB';
+  }
+
+  // ─── DRAG AND DROP REORDER ──────────────────────────────────────────────────
+  let dragLineIndex = null;
+
+  function onDragStart(e, lineIndex) {
+    dragLineIndex = lineIndex;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', lineIndex);
+    setTimeout(() => {
+      const row = document.getElementById(`task-row-${lineIndex}`);
+      if (row) row.classList.add('dragging');
+    }, 0);
+  }
+
+  function onDragOver(e, lineIndex) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    // Clear all indicators
+    document.querySelectorAll('.task-item').forEach(el => {
+      el.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+    if (lineIndex === dragLineIndex) return;
+    const row = document.getElementById(`task-row-${lineIndex}`);
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      row.classList.add('drag-over-top');
+    } else {
+      row.classList.add('drag-over-bottom');
+    }
+  }
+
+  function onDragEnd(e) {
+    dragLineIndex = null;
+    document.querySelectorAll('.task-item').forEach(el => {
+      el.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+    });
+  }
+
+  function onDrop(e, targetLineIndex) {
+    e.preventDefault();
+    if (dragLineIndex === null || dragLineIndex === targetLineIndex) {
+      onDragEnd(e);
+      return;
+    }
+
+    const lines = state.content.split('\n');
+    if (dragLineIndex >= lines.length || targetLineIndex >= lines.length) {
+      onDragEnd(e);
+      return;
+    }
+
+    // Determine insert position based on mouse position
+    const row = document.getElementById(`task-row-${targetLineIndex}`);
+    let insertAbove = true;
+    if (row) {
+      const rect = row.getBoundingClientRect();
+      insertAbove = e.clientY < rect.top + rect.height / 2;
+    }
+
+    // Remove the dragged line
+    const [draggedLine] = lines.splice(dragLineIndex, 1);
+
+    // Calculate insert position (adjusted for removal)
+    let insertAt = targetLineIndex;
+    if (dragLineIndex < targetLineIndex) insertAt--;
+    if (!insertAbove) insertAt++;
+
+    lines.splice(insertAt, 0, draggedLine);
+    state.content = lines.join('\n');
+    renderPreview();
+    updateMeta();
+    scheduleSave();
+    onDragEnd(e);
+  }
+
+  // ─── PRIORITY CYCLING ─────────────────────────────────────────────────────────
+  function cyclePriority(lineIndex) {
+    const lines = state.content.split('\n');
+    if (lineIndex >= lines.length) return;
+    const line = lines[lineIndex];
+
+    // Match: "- [ ] " or "- [x] " followed by optional priority prefix, then text
+    const m = line.match(/^(- \[[ x]\] )(!!!\s?|!!\s?|!\s?)?(.*)$/i);
+    if (!m) return;
+
+    const prefix = m[1];
+    const currentPri = (m[2] || '').trim();
+    const taskText = m[3];
+
+    // Cycle: none → ! (low) → !! (medium) → !!! (high) → none
+    let newPri = '';
+    if (!currentPri) newPri = '! ';
+    else if (currentPri === '!') newPri = '!! ';
+    else if (currentPri === '!!') newPri = '!!! ';
+    else newPri = '';
+
+    lines[lineIndex] = prefix + newPri + taskText;
+    state.content = lines.join('\n');
+    renderPreview();
+    updateMeta();
+    scheduleSave();
+  }
+
+  // Handle ?new=1 in new tabs
+  window.addEventListener('load', async () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === '1') {
+      // Remove ?new from URL
+      const url = new URL(window.location);
+      url.searchParams.delete('new');
+      window.history.replaceState({}, '', url.toString());
+      // After app loads, prompt for new file
+      await init();
+      if (state.token) {
+        setTimeout(() => createNewFile(), 500);
+      }
+      return;
+    }
+    init();
+  });
+  </script>
+</body>
+</html>
