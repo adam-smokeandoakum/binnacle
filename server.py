@@ -38,7 +38,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, token TEXT UNIQUE NOT NULL)")
     conn.execute("CREATE TABLE IF NOT EXISTS magic_links (code TEXT PRIMARY KEY, email TEXT NOT NULL, expires_at REAL NOT NULL, used INTEGER DEFAULT 0)")
-    conn.execute("CREATE TABLE IF NOT EXISTS categories (token TEXT NOT NULL, name TEXT NOT NULL, icon TEXT DEFAULT 'folder', color TEXT DEFAULT '#346665', sort_order INTEGER DEFAULT 0, PRIMARY KEY(token, name))")
     conn.commit()
     conn.close()
 
@@ -281,26 +280,29 @@ class Handler(BaseHTTPRequestHandler):
                 fh.write(content)
             return self._json(201, {"ok": True, "name": name})
 
-        # POST /api/categories/{token} — save categories for a user
-        m = re.match(r'^/api/categories/([^/]+)$', path)
+
+        # POST /api/lists/{token}/move — rename/move a file
+        m = re.match(r'^/api/lists/([^/]+)/move$', path)
         if m:
             token = m.group(1)
             if not safe_token(token):
-                return self._json(400, {"error": "invalid token"})
-            length = int(self.headers.get("Content-Length", 0))
+                return self._json(400, {'error': 'invalid token'})
+            length = int(self.headers.get('Content-Length', 0))
             body = json.loads(self.rfile.read(length)) if length else {}
-            categories = body.get("categories", [])
-            db = get_db()
-            db.execute("DELETE FROM categories WHERE token = ?", (token,))
-            for i, cat in enumerate(categories):
-                cat_name = (cat.get("name") or "").strip()
-                if not cat_name:
-                    continue
-                db.execute("INSERT OR REPLACE INTO categories (token, name, icon, color, sort_order) VALUES (?, ?, ?, ?, ?)",
-                           (token, cat_name, cat.get("icon", "folder"), cat.get("color", "#346665"), i))
-            db.commit()
-            db.close()
-            return self._json(200, {"ok": True})
+            src = safe_name(unquote(body.get('from', '')))
+            dst = safe_name(unquote(body.get('to', '')))
+            if not src or not dst:
+                return self._json(400, {'error': 'from and to required'})
+            token_dir = os.path.join(DATA_DIR, token)
+            src_fp = os.path.join(token_dir, src.replace('/', os.sep) + '.md')
+            dst_fp = os.path.join(token_dir, dst.replace('/', os.sep) + '.md')
+            if not os.path.isfile(src_fp):
+                return self._json(404, {'error': 'source not found'})
+            if os.path.isfile(dst_fp):
+                return self._json(409, {'error': 'destination already exists'})
+            os.makedirs(os.path.dirname(dst_fp), exist_ok=True)
+            os.rename(src_fp, dst_fp)
+            return self._json(200, {'ok': True, 'from': src, 'to': dst})
 
         if path == "/api/auth/send-link":
             length = int(self.headers.get("Content-Length", 0))
@@ -452,18 +454,6 @@ class Handler(BaseHTTPRequestHandler):
             os.makedirs(token_dir, exist_ok=True)
             return self._json(200, {"token": token})
 
-        # API: get categories for a token
-        m = re.match(r'^/api/categories/([^/]+)$', path)
-        if m:
-            token = m.group(1)
-            if not safe_token(token):
-                return self._json(400, {"error": "invalid token"})
-            db = get_db()
-            rows = db.execute("SELECT name, icon, color FROM categories WHERE token = ? ORDER BY sort_order", (token,)).fetchall()
-            db.close()
-            cats = [{"name": r[0], "icon": r[1], "color": r[2]} for r in rows]
-            return self._json(200, {"categories": cats})
-
         # API: list all files for a token (recursive)
         m = re.match(r'^/api/lists/([^/]+)$', path)
         if m:
@@ -571,18 +561,6 @@ class Handler(BaseHTTPRequestHandler):
                 os.remove(fp)
                 return self._json(200, {"ok": True})
             return self._json(404, {"error": "not found"})
-
-        # DELETE /api/categories/{token}/{catName} — delete a category
-        m = re.match(r'^/api/categories/([^/]+)/(.+)$', path)
-        if m:
-            token, cat_name = m.group(1), unquote(m.group(2))
-            if not safe_token(token):
-                return self._json(400, {"error": "invalid token"})
-            db = get_db()
-            db.execute("DELETE FROM categories WHERE token = ? AND name = ?", (token, cat_name))
-            db.commit()
-            db.close()
-            return self._json(200, {"ok": True})
 
         m = re.match(r'^/api/lists/([^/]+)/(.+)$', path)
         if not m:

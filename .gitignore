@@ -1,0 +1,1 @@
+node_modules/\ndata/\n*.db\n*.db-shm\n*.db-wal\n.env

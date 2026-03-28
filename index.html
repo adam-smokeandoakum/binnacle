@@ -155,26 +155,6 @@
     .collection-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(52,102,101,0.12); }
     #source-textarea { resize: none; font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; line-height: 1.6; }
     .save-status { transition: opacity 0.3s ease; }
-    /* Drag and drop */
-    .drag-handle {
-      cursor: grab; opacity: 0; transition: opacity 0.15s;
-      display: flex; align-items: center; padding: 2px;
-    }
-    .task-item:hover .drag-handle { opacity: 0.5; }
-    .drag-handle:hover { opacity: 1 !important; }
-    .task-item.dragging { opacity: 0.35; background: #f2f4f4; }
-    .task-item.drag-over-top { box-shadow: 0 -2px 0 0 #346665; }
-    .task-item.drag-over-bottom { box-shadow: 0 2px 0 0 #346665; }
-    /* Priority */
-    .priority-dot {
-      width: 8px; height: 8px; border-radius: 50%; cursor: pointer;
-      transition: all 0.2s; flex-shrink: 0; margin-top: 6px;
-    }
-    .priority-dot:hover { transform: scale(1.6); }
-    .priority-high { background: #9f403d; box-shadow: 0 0 4px rgba(159,64,61,0.4); }
-    .priority-medium { background: #d4a017; }
-    .priority-low { background: #346665; }
-    .priority-none { background: #dde4e5; }
     .blur-blob-1 {
       position: fixed; bottom: -80px; left: -80px; width: 320px; height: 320px;
       background: radial-gradient(circle, rgba(218,248,221,0.45) 0%, transparent 70%);
@@ -198,6 +178,18 @@
     h1, h2, h3 { font-family: 'Manrope', sans-serif; }
     .toggle-btn { transition: all 0.15s; }
     .toggle-btn.active { background: #346665; color: #dafffd; }
+
+    /* Drag and drop */
+    .task-item.drag-over { border-top: 2px solid #346665 !important; }
+    .task-item.dragging { opacity: 0.4; }
+    .drag-handle { opacity: 0; transition: opacity 0.15s; }
+    .task-item:hover .drag-handle { opacity: 1; }
+    /* Priority dots */
+    .priority-btn { opacity: 0; transition: opacity 0.15s; }
+    .task-item:hover .priority-btn, .priority-btn.has-priority { opacity: 1; }
+    .priority-p1 { color: #e53e3e; }
+    .priority-p2 { color: #d69e2e; }
+    .priority-none { color: #adb3b4; }
   </style>
 </head>
 <body class="h-screen overflow-hidden flex flex-col">
@@ -463,6 +455,87 @@
     categories: [...DEFAULT_CATEGORIES],
     activeCategory: null,  // null = show all
   };
+
+
+  // ─── DRAG & DROP REORDER ─────────────────────────────────────────────────────
+  let dragSourceLine = null;
+
+  function onTaskDragStart(e, lineIndex) {
+    dragSourceLine = lineIndex;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', lineIndex);
+    const row = document.getElementById(`task-row-${lineIndex}`);
+    if (row) setTimeout(() => row.classList.add('dragging'), 0);
+  }
+
+  function onTaskDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    // Highlight drop target
+    document.querySelectorAll('.task-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    const target = e.currentTarget;
+    if (target && target !== document.getElementById(`task-row-${dragSourceLine}`)) {
+      target.classList.add('drag-over');
+    }
+  }
+
+  function onTaskDrop(e, targetLineIndex) {
+    e.preventDefault();
+    document.querySelectorAll('.task-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    if (dragSourceLine === null || dragSourceLine === targetLineIndex) return;
+
+    const lines = state.content.split('\n');
+    const srcLine = lines[dragSourceLine];
+    // Remove source line
+    lines.splice(dragSourceLine, 1);
+    // Adjust target index if source was before target
+    const adjustedTarget = targetLineIndex > dragSourceLine ? targetLineIndex - 1 : targetLineIndex;
+    // Insert before target
+    lines.splice(adjustedTarget, 0, srcLine);
+    state.content = lines.join('\n');
+    dragSourceLine = null;
+    renderPreview();
+    scheduleSave();
+  }
+
+  function onTaskDragEnd(e) {
+    document.querySelectorAll('.task-item.dragging').forEach(el => el.classList.remove('dragging'));
+    document.querySelectorAll('.task-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    dragSourceLine = null;
+  }
+
+  // ─── PRIORITY ────────────────────────────────────────────────────────────────
+  function parsePriority(text) {
+    // Detect [p1] or [p2] suffix
+    const m = text.match(/^(.*?)\s*\[p([12])\]\s*$/i);
+    if (m) return { text: m[1].trim(), priority: parseInt(m[2]) };
+    return { text, priority: 0 };
+  }
+
+  function priorityDotHtml(priority, lineIndex) {
+    const label = priority === 1 ? 'P1' : priority === 2 ? 'P2' : '·';
+    const cls = priority === 1 ? 'priority-p1' : priority === 2 ? 'priority-p2' : 'priority-none';
+    const hasPrio = priority > 0 ? 'has-priority' : '';
+    return `<button class="priority-btn ${hasPrio} shrink-0 mt-0.5 text-xs font-bold rounded px-1" style="font-family:'JetBrains Mono',monospace;background:none;border:none;cursor:pointer;min-width:24px" onclick="cyclePriority(${lineIndex})" title="Priority: ${priority === 0 ? 'none' : 'P'+priority}"><span class="${cls}">${label}</span></button>`;
+  }
+
+  function cyclePriority(lineIndex) {
+    const lines = state.content.split('\n');
+    if (lineIndex >= lines.length) return;
+    const line = lines[lineIndex];
+    const taskMatch = line.match(/^(- \[[ x]\] )(.*?)$/i);
+    if (!taskMatch) return;
+    const prefix = taskMatch[1];
+    const rawText = taskMatch[2];
+    const { text, priority } = parsePriority(rawText);
+    // Cycle: 0 → 1 → 2 → 0
+    const nextPriority = (priority + 1) % 3;
+    const newText = nextPriority > 0 ? `${text} [p${nextPriority}]` : text;
+    lines[lineIndex] = `${prefix}${newText}`;
+    state.content = lines.join('\n');
+    renderPreview();
+    scheduleSave();
+  }
 
   // ─── INIT ─────────────────────────────────────────────────────────────────────
   async function init() {
@@ -846,26 +919,26 @@
       if (unchecked || checked) {
         const isChecked = !!checked;
         const rawText = isChecked ? checked[1] : unchecked[1];
+        const {text, priority} = parsePriority(rawText);
         const idx = taskIndex;
-        // Parse priority markers: !!! = high, !! = medium, ! = low
-        let displayText = rawText;
-        let priority = 'none';
-        if (rawText.startsWith('!!! ')) { priority = 'high'; displayText = rawText.substring(4); }
-        else if (rawText.startsWith('!! ')) { priority = 'medium'; displayText = rawText.substring(3); }
-        else if (rawText.startsWith('! ')) { priority = 'low'; displayText = rawText.substring(2); }
+        const prioHtml = priorityDotHtml(priority, i);
         html += `
           <div class="task-item flex items-start gap-2 px-3 py-2.5 rounded-xl mb-1 group" data-line="${i}" id="task-row-${i}"
-            draggable="true" ondragstart="onDragStart(event,${i})" ondragover="onDragOver(event,${i})" ondrop="onDrop(event,${i})" ondragend="onDragEnd(event)">
-            <div class="drag-handle mt-1" title="Drag to reorder">
-              <span class="material-symbols-outlined" style="font-size:14px;color:#adb3b4">drag_indicator</span>
+            draggable="true"
+            ondragstart="onTaskDragStart(event, ${i})"
+            ondragover="onTaskDragOver(event)"
+            ondrop="onTaskDrop(event, ${i})"
+            ondragend="onTaskDragEnd(event)">
+            <div class="drag-handle mt-0.5 cursor-grab shrink-0" title="Drag to reorder">
+              <span class="material-symbols-outlined" style="font-size:16px;color:#adb3b4;user-select:none">drag_indicator</span>
             </div>
-            <div class="task-checkbox-btn mt-0.5 ${isChecked ? 'checked' : ''}" onclick="toggleTask(${i}, this)" title="Toggle task">
+            <div class="task-checkbox-btn mt-0.5 shrink-0 ${isChecked ? 'checked' : ''}" onclick="toggleTask(${i}, this)" title="Toggle task">
               <span class="material-symbols-outlined check-icon" style="font-size:14px;color:white;font-variation-settings:'FILL' 1,'wght' 500">check</span>
             </div>
-            <div class="priority-dot priority-${priority}" onclick="cyclePriority(${i})" title="Click to set priority (none → low → medium → high)"></div>
             <div class="flex flex-col flex-1 min-w-0">
-              <span class="text-sm task-text" style="font-family:'JetBrains Mono',monospace;color:#2d3435;word-break:break-word;transition:opacity 0.3s ease, text-decoration 0.3s ease;${isChecked ? 'opacity:0.45;text-decoration:line-through' : ''}">${escapeHtml(displayText)}</span>
+              <span class="text-sm task-text" style="font-family:'JetBrains Mono',monospace;color:#2d3435;word-break:break-word;transition:opacity 0.3s ease, text-decoration 0.3s ease;${isChecked ? 'opacity:0.45;text-decoration:line-through' : ''}">${escapeHtml(text)}</span>
             </div>
+            ${prioHtml}
           </div>
         `;
         taskIndex++;
@@ -1115,110 +1188,6 @@
     if (!bytes) return '0 B';
     if (bytes < 1024) return bytes + ' B';
     return (bytes/1024).toFixed(1) + ' KB';
-  }
-
-  // ─── DRAG AND DROP REORDER ──────────────────────────────────────────────────
-  let dragLineIndex = null;
-
-  function onDragStart(e, lineIndex) {
-    dragLineIndex = lineIndex;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', lineIndex);
-    setTimeout(() => {
-      const row = document.getElementById(`task-row-${lineIndex}`);
-      if (row) row.classList.add('dragging');
-    }, 0);
-  }
-
-  function onDragOver(e, lineIndex) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    // Clear all indicators
-    document.querySelectorAll('.task-item').forEach(el => {
-      el.classList.remove('drag-over-top', 'drag-over-bottom');
-    });
-    if (lineIndex === dragLineIndex) return;
-    const row = document.getElementById(`task-row-${lineIndex}`);
-    if (!row) return;
-    const rect = row.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    if (e.clientY < midY) {
-      row.classList.add('drag-over-top');
-    } else {
-      row.classList.add('drag-over-bottom');
-    }
-  }
-
-  function onDragEnd(e) {
-    dragLineIndex = null;
-    document.querySelectorAll('.task-item').forEach(el => {
-      el.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
-    });
-  }
-
-  function onDrop(e, targetLineIndex) {
-    e.preventDefault();
-    if (dragLineIndex === null || dragLineIndex === targetLineIndex) {
-      onDragEnd(e);
-      return;
-    }
-
-    const lines = state.content.split('\n');
-    if (dragLineIndex >= lines.length || targetLineIndex >= lines.length) {
-      onDragEnd(e);
-      return;
-    }
-
-    // Determine insert position based on mouse position
-    const row = document.getElementById(`task-row-${targetLineIndex}`);
-    let insertAbove = true;
-    if (row) {
-      const rect = row.getBoundingClientRect();
-      insertAbove = e.clientY < rect.top + rect.height / 2;
-    }
-
-    // Remove the dragged line
-    const [draggedLine] = lines.splice(dragLineIndex, 1);
-
-    // Calculate insert position (adjusted for removal)
-    let insertAt = targetLineIndex;
-    if (dragLineIndex < targetLineIndex) insertAt--;
-    if (!insertAbove) insertAt++;
-
-    lines.splice(insertAt, 0, draggedLine);
-    state.content = lines.join('\n');
-    renderPreview();
-    updateMeta();
-    scheduleSave();
-    onDragEnd(e);
-  }
-
-  // ─── PRIORITY CYCLING ─────────────────────────────────────────────────────────
-  function cyclePriority(lineIndex) {
-    const lines = state.content.split('\n');
-    if (lineIndex >= lines.length) return;
-    const line = lines[lineIndex];
-
-    // Match: "- [ ] " or "- [x] " followed by optional priority prefix, then text
-    const m = line.match(/^(- \[[ x]\] )(!!!\s?|!!\s?|!\s?)?(.*)$/i);
-    if (!m) return;
-
-    const prefix = m[1];
-    const currentPri = (m[2] || '').trim();
-    const taskText = m[3];
-
-    // Cycle: none → ! (low) → !! (medium) → !!! (high) → none
-    let newPri = '';
-    if (!currentPri) newPri = '! ';
-    else if (currentPri === '!') newPri = '!! ';
-    else if (currentPri === '!!') newPri = '!!! ';
-    else newPri = '';
-
-    lines[lineIndex] = prefix + newPri + taskText;
-    state.content = lines.join('\n');
-    renderPreview();
-    updateMeta();
-    scheduleSave();
   }
 
   // Handle ?new=1 in new tabs
