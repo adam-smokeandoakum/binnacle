@@ -218,6 +218,53 @@
     .priority-p1 { color: #e53e3e; }
     .priority-p2 { color: #d69e2e; }
     .priority-none { color: #adb3b4; }
+
+    /* Custom modals */
+    #modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(45,52,53,0.35); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+    }
+    #modal-overlay.show { opacity: 1; pointer-events: all; }
+    .modal-card {
+      background: white; border-radius: 1rem; padding: 2rem 2rem 1.75rem;
+      box-shadow: 0 20px 60px rgba(52,102,101,0.18), 0 4px 12px rgba(52,102,101,0.08);
+      width: 100%; max-width: 400px; margin: 1rem;
+      transform: scale(0.95) translateY(12px);
+      transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s ease;
+      opacity: 0;
+    }
+    #modal-overlay.show .modal-card { transform: scale(1) translateY(0); opacity: 1; }
+    .modal-title { font-size: 1.05rem; font-weight: 700; color: #2d3435; margin-bottom: 0.4rem; font-family: 'Manrope',sans-serif; }
+    .modal-desc { font-size: 0.8rem; color: #5a6061; margin-bottom: 1.25rem; line-height: 1.4; }
+    .modal-input {
+      width: 100%; box-sizing: border-box; padding: 0.625rem 0.875rem;
+      border-radius: 0.5rem; border: 1.5px solid #dde4e5;
+      font-family: 'JetBrains Mono',monospace; font-size: 0.875rem; color: #2d3435;
+      outline: none; transition: border-color 0.15s; margin-bottom: 1.5rem;
+      background: #f9f9f9;
+    }
+    .modal-input:focus { border-color: #346665; background: white; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+    .modal-btn { padding: 0.5rem 1.25rem; border-radius: 2rem; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; font-family: 'Manrope',sans-serif; }
+    .modal-btn-primary { background: #346665; color: #dafffd; }
+    .modal-btn-primary:hover { background: #275a59; }
+    .modal-btn-secondary { background: none; color: #5a6061; border: 1.5px solid #dde4e5; }
+    .modal-btn-secondary:hover { background: #f2f4f4; }
+    .modal-btn-danger { background: #9f403d; color: white; }
+    .modal-btn-danger:hover { background: #7a2e2e; }
+    /* Floating particles on task complete */
+    .particle { position: fixed; pointer-events: none; border-radius: 50%; z-index: 999; }
+    /* List item context / drag */
+    .file-item-row { position: relative; }
+    .file-item-row:hover .file-item-actions { opacity: 1; }
+    .file-item-actions { opacity: 0; transition: opacity 0.15s; display: flex; align-items: center; gap: 2px; }
+    /* Archive drop zone */
+    #archive-drop-zone {
+      border: 1.5px dashed transparent; border-radius: 0.5rem; transition: all 0.2s;
+    }
+    #archive-drop-zone.drag-active { border-color: #346665; background: rgba(184,236,234,0.15); }
   </style>
 </head>
 <body class="h-screen overflow-hidden flex flex-col">
@@ -225,6 +272,19 @@
   <!-- Decorative blobs -->
   <div class="blur-blob-1"></div>
   <div class="blur-blob-2"></div>
+
+  <!-- CUSTOM MODAL -->
+  <div id="modal-overlay" onclick="modalOverlayClick(event)">
+    <div class="modal-card" id="modal-card">
+      <div class="modal-title" id="modal-title">Title</div>
+      <div class="modal-desc" id="modal-desc"></div>
+      <input type="text" class="modal-input" id="modal-input" onkeydown="modalKeydown(event)" style="display:none"/>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-secondary" id="modal-cancel-btn" onclick="resolveModal(null)">Cancel</button>
+        <button class="modal-btn modal-btn-primary" id="modal-ok-btn" onclick="modalOk()">Create</button>
+      </div>
+    </div>
+  </div>
 
   <!-- AUTH SCREEN -->
   <div id="auth-screen">
@@ -383,6 +443,14 @@
           </button>
         </div>
 
+        <!-- Archive drop zone -->
+        <div id="archive-drop-zone" class="mx-3 mt-3 px-2 py-2 rounded-lg flex items-center gap-2 cursor-pointer transition-all hover:bg-gray-100"
+          ondragover="archiveDragOver(event)" ondragleave="archiveDragLeave(event)" ondrop="archiveDrop(event)"
+          onclick="selectCategory('Archive')">
+          <span class="material-symbols-outlined" style="font-size:16px;color:#adb3b4">archive</span>
+          <span class="text-xs font-medium" style="color:#adb3b4">Archive</span>
+        </div>
+
         <div class="flex-1"></div>
 
         <!-- Vault Meta -->
@@ -463,6 +531,154 @@
   </div>
 
   <script>
+  // ─── CUSTOM MODALS ───────────────────────────────────────────────────────────
+  let _modalResolve = null;
+  let _modalIsInput = false;
+
+  function showModal(title, desc = '', defaultValue = '', confirmText = 'Create') {
+    return new Promise(resolve => {
+      _modalResolve = resolve;
+      _modalIsInput = true;
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-desc').textContent = desc;
+      const inp = document.getElementById('modal-input');
+      inp.style.display = 'block';
+      inp.value = defaultValue;
+      document.getElementById('modal-ok-btn').textContent = confirmText;
+      document.getElementById('modal-ok-btn').className = 'modal-btn modal-btn-primary';
+      document.getElementById('modal-cancel-btn').style.display = '';
+      document.getElementById('modal-overlay').classList.add('show');
+      setTimeout(() => { inp.focus(); inp.select(); }, 120);
+    });
+  }
+
+  function showConfirm(title, desc = '', confirmText = 'Confirm', danger = false) {
+    return new Promise(resolve => {
+      _modalResolve = resolve;
+      _modalIsInput = false;
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-desc').textContent = desc;
+      document.getElementById('modal-input').style.display = 'none';
+      document.getElementById('modal-ok-btn').textContent = confirmText;
+      document.getElementById('modal-ok-btn').className = 'modal-btn ' + (danger ? 'modal-btn-danger' : 'modal-btn-primary');
+      document.getElementById('modal-cancel-btn').style.display = '';
+      document.getElementById('modal-overlay').classList.add('show');
+    });
+  }
+
+  function resolveModal(value) {
+    document.getElementById('modal-overlay').classList.remove('show');
+    if (_modalResolve) { const r = _modalResolve; _modalResolve = null; r(value); }
+  }
+
+  function modalOk() {
+    const val = _modalIsInput ? document.getElementById('modal-input').value.trim() : true;
+    resolveModal(val || (_modalIsInput ? null : true));
+  }
+
+  function modalKeydown(e) {
+    if (e.key === 'Enter') modalOk();
+    if (e.key === 'Escape') resolveModal(null);
+  }
+
+  function modalOverlayClick(e) {
+    if (e.target === document.getElementById('modal-overlay')) resolveModal(null);
+  }
+
+  // ─── PARTICLE CELEBRATION ─────────────────────────────────────────────────────
+  function spawnParticles(anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const colors = ['#346665','#4b6550','#b8ecea','#daf8dd','#aadedb','#cceacf'];
+    for (let i = 0; i < 10; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const size = 4 + Math.random() * 5;
+      const angle = (Math.random() * 360) * Math.PI / 180;
+      const dist = 30 + Math.random() * 60;
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist - 20;
+      p.style.cssText = `width:${size}px;height:${size}px;background:${colors[i % colors.length]};left:${cx}px;top:${cy}px;`;
+      document.body.appendChild(p);
+      const anim = p.animate([
+        { transform: 'translate(-50%,-50%) scale(1)', opacity: 0.9 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0)`, opacity: 0 }
+      ], { duration: 550 + Math.random() * 350, easing: 'cubic-bezier(0,0.9,0.57,1)', fill: 'forwards', delay: i * 25 });
+      anim.onfinish = () => p.remove();
+    }
+  }
+
+  // ─── ARCHIVE DRAG ──────────────────────────────────────────────────────────────
+  let _draggingListName = null;
+
+  function archiveDragOver(e) {
+    if (!_draggingListName) return;
+    e.preventDefault();
+    document.getElementById('archive-drop-zone').classList.add('drag-active');
+  }
+  function archiveDragLeave(e) {
+    document.getElementById('archive-drop-zone').classList.remove('drag-active');
+  }
+  async function archiveDrop(e) {
+    e.preventDefault();
+    document.getElementById('archive-drop-zone').classList.remove('drag-active');
+    if (!_draggingListName) return;
+    const src = _draggingListName;
+    _draggingListName = null;
+    const listPart = src.split('/').pop();
+    const newName = 'Archive/' + listPart;
+    const confirmed = await showConfirm(`Archive "${listPart}"?`, 'It will be moved to the Archive folder and can still be accessed there.', 'Archive');
+    if (!confirmed) return;
+    // Rename: load old, save as new, delete old
+    try {
+      const res = await fetch(`api/lists/${state.token}/${encodeURIComponent(src)}`);
+      const content = await res.text();
+      await fetch(`api/lists/${state.token}/${encodeURIComponent(newName)}`, {
+        method: 'PUT', headers: {'Content-Type': 'text/plain'}, body: content
+      });
+      await fetch(`api/lists/${state.token}/${encodeURIComponent(src)}`, { method: 'DELETE' });
+      if (state.currentFile === src) { state.currentFile = newName; state.content = content; renderContent(); updateHeaderFilename(); }
+      await loadFileList();
+    } catch(e) { console.error('Archive failed', e); }
+  }
+
+  async function archiveList(name) {
+    const listPart = name.split('/').pop();
+    const confirmed = await showConfirm(`Archive "${listPart}"?`, 'Moved to Archive folder. Still accessible.', 'Archive');
+    if (!confirmed) return;
+    const newName = 'Archive/' + listPart;
+    try {
+      const res = await fetch(`api/lists/${state.token}/${encodeURIComponent(name)}`);
+      const content = await res.text();
+      await fetch(`api/lists/${state.token}/${encodeURIComponent(newName)}`, {
+        method: 'PUT', headers: {'Content-Type': 'text/plain'}, body: content
+      });
+      await fetch(`api/lists/${state.token}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if (state.currentFile === name) { state.currentFile = newName; state.content = content; renderContent(); updateHeaderFilename(); }
+      await loadFileList();
+    } catch(e) { console.error('Archive failed', e); }
+  }
+
+  async function deleteList(name) {
+    const confirmed = await showConfirm(`Delete "${name.split('/').pop()}"?`, 'This cannot be undone.', 'Delete', true);
+    if (!confirmed) return;
+    try {
+      await fetch(`api/lists/${state.token}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if (state.currentFile === name) { state.currentFile = null; state.content = ''; renderContent(); updateHeaderFilename(); }
+      await loadFileList();
+    } catch(e) {}
+  }
+
+  function listItemDragStart(e, name) {
+    _draggingListName = name;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function listItemDragEnd(e) {
+    _draggingListName = null;
+    document.getElementById('archive-drop-zone').classList.remove('drag-active');
+  }
+
   // ─── STATE ───────────────────────────────────────────────────────────────────
   const API = '';  // relative — served from same origin
   const DEFAULT_CATEGORIES = [
@@ -782,11 +998,17 @@
         // Direct lists in this category
         for (const f of catData.files) {
           const displayName = f.name.split('/').pop().replace(/\.md$/, '');
-          const isActive = state.activeCategory === f.name || state.currentFile === f.name;
-          html += `<div class="file-item flex items-center gap-2 pl-9 pr-2 py-1.5 ${state.currentFile === f.name ? 'active' : ''}"
-            onclick="loadFile('${escapeAttr(f.name)}')">
-            <span class="material-symbols-outlined shrink-0" style="font-size:12px;color:#adb3b4">description</span>
-            <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+          const isArchived = f.name.toLowerCase().startsWith('archive/');
+          html += `<div class="file-item-row group flex items-center gap-1 pl-9 pr-2 py-1.5 rounded ${state.currentFile === f.name ? 'active' : ''}"
+            draggable="true" ondragstart="listItemDragStart(event,'${escapeAttr(f.name)}')" ondragend="listItemDragEnd(event)">
+            <div class="flex-1 flex items-center gap-1.5 min-w-0 cursor-pointer" onclick="loadFile('${escapeAttr(f.name)}')">
+              <span class="material-symbols-outlined shrink-0" style="font-size:12px;color:#adb3b4">description</span>
+              <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+            </div>
+            <div class="file-item-actions shrink-0 flex items-center gap-0.5">
+              ${!isArchived ? `<button onclick="event.stopPropagation();archiveList('${escapeAttr(f.name)}')" title="Archive" style="background:none;border:none;cursor:pointer;padding:1px;border-radius:3px" class="hover:bg-gray-200"><span class="material-symbols-outlined" style="font-size:12px;color:#adb3b4">archive</span></button>` : ''}
+              <button onclick="event.stopPropagation();deleteList('${escapeAttr(f.name)}')" title="Delete" style="background:none;border:none;cursor:pointer;padding:1px;border-radius:3px" class="hover:bg-gray-200"><span class="material-symbols-outlined" style="font-size:12px;color:#adb3b4">delete</span></button>
+            </div>
           </div>`;
         }
 
@@ -814,10 +1036,16 @@
           if (isSubExpanded) {
             for (const f of subData.files) {
               const displayName = f.name.split('/').pop().replace(/\.md$/, '');
-              html += `<div class="file-item flex items-center gap-2 pl-12 pr-2 py-1.5 ${state.currentFile === f.name ? 'active' : ''}"
-                onclick="loadFile('${escapeAttr(f.name)}')">
-                <span class="material-symbols-outlined shrink-0" style="font-size:11px;color:#adb3b4">description</span>
-                <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+              html += `<div class="file-item-row group flex items-center gap-1 pl-12 pr-2 py-1.5 rounded ${state.currentFile === f.name ? 'active' : ''}"
+                draggable="true" ondragstart="listItemDragStart(event,'${escapeAttr(f.name)}')" ondragend="listItemDragEnd(event)">
+                <div class="flex-1 flex items-center gap-1.5 min-w-0 cursor-pointer" onclick="loadFile('${escapeAttr(f.name)}')">
+                  <span class="material-symbols-outlined shrink-0" style="font-size:11px;color:#adb3b4">description</span>
+                  <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+                </div>
+                <div class="file-item-actions shrink-0 flex items-center gap-0.5">
+                  <button onclick="event.stopPropagation();archiveList('${escapeAttr(f.name)}')" title="Archive" style="background:none;border:none;cursor:pointer;padding:1px;border-radius:3px" class="hover:bg-gray-200"><span class="material-symbols-outlined" style="font-size:11px;color:#adb3b4">archive</span></button>
+                  <button onclick="event.stopPropagation();deleteList('${escapeAttr(f.name)}')" title="Delete" style="background:none;border:none;cursor:pointer;padding:1px;border-radius:3px" class="hover:bg-gray-200"><span class="material-symbols-outlined" style="font-size:11px;color:#adb3b4">delete</span></button>
+                </div>
               </div>`;
             }
           }
@@ -863,9 +1091,8 @@
     renderCategoryNav();
   }
 
-  function addListToFolder(folderPath) {
-    const defaultName = folderPath + '/new-list';
-    const name = prompt('New list name:', defaultName);
+  async function addListToFolder(folderPath) {
+    const name = await showModal('New List', `Create a list inside "${folderPath}"`, folderPath + '/new-list', 'Create');
     if (!name) return;
     let fname = name.endsWith('.md') ? name : name + '.md';
     const segments = fname.replace('.md','').split('/');
@@ -884,8 +1111,8 @@
     }, '');
   }
 
-  function addSubcategoryTo(catName) {
-    const subName = prompt('Subcategory name (e.g. "Lipton" or "HoldFast"):');
+  async function addSubcategoryTo(catName) {
+    const subName = await showModal('New Subcategory', `Add a subcategory inside "${catName}" (e.g. "Lipton" or "HoldFast")`, '', 'Create');
     if (!subName || !subName.trim()) return;
     const subPath = catName + '/' + subName.trim();
     // Expand parent
@@ -921,8 +1148,8 @@
     if (label) label.textContent = catName && catName !== '__uncategorized' ? catName.split('/').pop() : 'Lists';
   }
 
-  function addCategory() {
-    const name = prompt('Category name (use "/" for subcategory, e.g. "Business" or "Business/Lipton"):');
+  async function addCategory() {
+    const name = await showModal('New Category', 'Use "/" for subcategory paths (e.g. "Business" or "Business/Lipton")', '', 'Create');
     if (!name || !name.trim()) return;
     const trimmed = name.trim();
     const parts = trimmed.split('/');
@@ -958,9 +1185,10 @@
     }
   }
 
-  function categoryContextMenu(e, catName) {
+  async function categoryContextMenu(e, catName) {
     e.preventDefault();
-    if (confirm(`Remove category "${catName}"? (Lists inside it won't be deleted)`)) {
+    const confirmed = await showConfirm(`Remove "${catName}"?`, "Lists inside it won't be deleted.", 'Remove', true);
+    if (confirmed) {
       state.categories = state.categories.filter(c => c.name !== catName);
       saveCategories();
       if (state.activeCategory === catName) state.activeCategory = null;
@@ -1005,10 +1233,23 @@
           displayName = f.name.substring(prefix.length);
         }
       }
-      html += `<div class="file-item flex items-center gap-2 px-2 py-2 ${state.currentFile === f.name ? 'active' : ''}"
-        onclick="loadFile('${escapeAttr(f.name)}')">
-        <span class="material-symbols-outlined shrink-0" style="font-size:14px;color:#adb3b4">description</span>
-        <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+      const isArchived = f.name.toLowerCase().startsWith('archive/');
+      html += `<div class="file-item-row group flex items-center gap-1 px-2 py-1.5 rounded ${state.currentFile === f.name ? 'active' : ''}"
+        draggable="true"
+        ondragstart="listItemDragStart(event, '${escapeAttr(f.name)}')"
+        ondragend="listItemDragEnd(event)">
+        <div class="file-item flex-1 flex items-center gap-2 min-w-0 cursor-pointer" onclick="loadFile('${escapeAttr(f.name)}')">
+          <span class="material-symbols-outlined shrink-0" style="font-size:13px;color:#adb3b4">description</span>
+          <span class="text-xs truncate font-mono" style="color:#2d3435">${escapeHtml(displayName)}</span>
+        </div>
+        <div class="file-item-actions shrink-0 flex items-center gap-0.5">
+          ${!isArchived ? `<button onclick="event.stopPropagation();archiveList('${escapeAttr(f.name)}')" title="Archive" style="background:none;border:none;cursor:pointer;padding:2px;border-radius:4px;line-height:1" class="hover:bg-gray-200">
+            <span class="material-symbols-outlined" style="font-size:13px;color:#adb3b4">archive</span>
+          </button>` : ''}
+          <button onclick="event.stopPropagation();deleteList('${escapeAttr(f.name)}')" title="Delete" style="background:none;border:none;cursor:pointer;padding:2px;border-radius:4px;line-height:1" class="hover:bg-gray-200">
+            <span class="material-symbols-outlined" style="font-size:13px;color:#adb3b4">delete</span>
+          </button>
+        </div>
       </div>`;
     }
     el.innerHTML = html;
@@ -1034,7 +1275,8 @@
   async function createNewFile() {
     const catPrefix = (state.activeCategory && state.activeCategory !== '__uncategorized') ? state.activeCategory + '/' : '';
     const placeholder = catPrefix ? `e.g. ${catPrefix}new-list` : 'e.g. work or Business/new-list';
-    const name = prompt(`Enter file name (${placeholder}):`);
+    const defaultVal = catPrefix ? catPrefix + 'new-list' : '';
+    const name = await showModal('New List', `Enter a name (${placeholder})`, defaultVal, 'Create');
     if (!name) return;
     let fname = name.endsWith('.md') ? name : name + '.md';
     // Auto-prefix category if not already included
@@ -1191,6 +1433,8 @@
         ripple.className = 'check-ripple';
         btnEl.appendChild(ripple);
         setTimeout(() => ripple.remove(), 700);
+        // Background particles — the cool-guy nod
+        spawnParticles(btnEl);
         // Row flash
         if (row) {
           row.classList.add('task-row-flash');
